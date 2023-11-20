@@ -1,6 +1,50 @@
 from django.db import models
 from django.urls import reverse
 from django.contrib.auth.models import User
+from django.db.models import Count, Prefetch
+
+
+class PostQuerySet(models.QuerySet):
+    def popular(self):
+        return self.annotate(likes_count=Count('likes')) \
+                .prefetch_related('author') \
+                .order_by('-likes_count')
+
+    def fetch_with_comments_count(self):
+        '''Функция fetch_with_comments_count хороша тем
+        что она не накладывает второй annotate на Querie Set, а создает новый
+        и складывает оба с помощью id постов'''
+        most_popular_posts = self
+        most_popular_posts_ids = [post.id for post in most_popular_posts]
+
+        posts_with_comments = Post.objects.prefetch_related('author') \
+                                .filter(id__in=most_popular_posts_ids) \
+                                .annotate(comments_count=Count('comments'))
+        ids_and_comments = posts_with_comments.values_list(
+            'id',
+            'comments_count'
+        )
+        count_for_id = dict(ids_and_comments)
+        for post in most_popular_posts:
+            post.comments_count = count_for_id[post.id]
+
+        return most_popular_posts
+
+    def fetch_tags_with_posts_count(self):
+        return self.prefetch_related(
+            Prefetch(
+                'tags',
+                queryset=Tag.objects.annotate(posts_count=Count("posts"))
+            )
+        )
+
+
+class TagQuerySet(models.QuerySet):
+
+    def popular(self):
+        sorted_popular_posts = self.annotate(posts_count=Count('posts')) \
+                    .order_by("-posts_count")
+        return sorted_popular_posts
 
 
 class Post(models.Model):
@@ -31,6 +75,8 @@ class Post(models.Model):
     def get_absolute_url(self):
         return reverse('post_detail', args={'slug': self.slug})
 
+    objects = PostQuerySet.as_manager()
+
     class Meta:
         ordering = ['-published_at']
         verbose_name = 'пост'
@@ -39,6 +85,8 @@ class Post(models.Model):
 
 class Tag(models.Model):
     title = models.CharField('Тег', max_length=20, unique=True)
+
+    objects = TagQuerySet.as_manager()
 
     def __str__(self):
         return self.title
