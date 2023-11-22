@@ -62,7 +62,7 @@ def index(request):
 
 
 def post_detail(request, slug):
-    post = Post.objects.get(slug=slug)
+    post = Post.objects.popular().get(slug=slug)
     comments = Comment.objects.filter(post=post)
     serialized_comments = []
     # for comment in comments:
@@ -73,16 +73,16 @@ def post_detail(request, slug):
             'author': comment.author.username,
         })
 
-    likes = post.likes.all()
+    #likes = post.likes.all()
 
-    related_tags = post.tags.all()
+    related_tags = post.tags.annotate(posts_count=Count("posts"))
 
     serialized_post = {
         'title': post.title,
         'text': post.text,
         'author': post.author.username,
         'comments': serialized_comments,
-        'likes_amount': len(likes),
+        'likes_amount': post.likes_count, #len(likes),
         'image_url': post.image.url if post.image else None,
         'published_at': post.published_at,
         'slug': post.slug,
@@ -94,7 +94,7 @@ def post_detail(request, slug):
     # most_popular_tags = popular_tags[-5:]
     most_popular_tags = Tag.objects.popular()[:5]
 
-    # most_popular_posts = []  # TODO. Как это посчитать?
+    # most_popular_posts = []
     most_popular_posts = Post.objects.popular() \
         .fetch_tags_with_posts_count() \
         .fetch_with_comments_count()[:5]
@@ -122,7 +122,9 @@ def tag_filter(request, tag_title):
         .fetch_tags_with_posts_count() \
         .fetch_with_comments_count()[:5]
 
-    related_posts = tag.posts.all()[:20]
+    related_posts = tag.posts.popular() \
+        .fetch_tags_with_posts_count() \
+        .fetch_with_comments_count()[:20]
 
     context = {
         'tag': tag.title,
