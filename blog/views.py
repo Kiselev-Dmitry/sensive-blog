@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.db.models import Count
 from blog.models import Comment, Post, Tag
+from django.shortcuts import get_object_or_404
 
 
 def serialize_post(post):
@@ -46,8 +47,7 @@ def index(request):
 
 
 def post_detail(request, slug):
-    post = Post.objects.popular().get(slug=slug)
-    comments = Comment.objects.filter(post=post)
+    post = get_object_or_404(Post.objects.popular(), slug=slug)
     serialized_comments = []
     for comment in post.comments.all().prefetch_related('author'):
         serialized_comments.append({
